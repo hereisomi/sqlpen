@@ -126,21 +126,9 @@ except ImportError:
     BIT: Any = None
 
 
-# Import SchemaAnalyzer with fallback
-try:
-    from aligner.schema_analyzer import SchemaAnalyzer, ColumnInfo, ConstraintInfo
-except ImportError:
-    try:
-        from schema_analyzer import SchemaAnalyzer, ColumnInfo, ConstraintInfo
-    except ImportError:
-        raise ImportError("SchemaAnalyzer not found. Please ensure schema_analyzer.py is available.")
+from misc.schema_analyzer import SchemaAnalyzer, ColumnInfo, ConstraintInfo
 
-# Optional sklearn
-try:
-    from sklearn.ensemble import IsolationForest
-    SKLEARN_AVAILABLE = True
-except ImportError:
-    SKLEARN_AVAILABLE = False
+from sklearn.ensemble import IsolationForest
 
 # Configure logging
 logger = logging.getLogger("StrictCorrector")
@@ -546,7 +534,7 @@ class SchemaAligner:
             return
 
         # Attempt Outlier Correction
-        if SKLEARN_AVAILABLE and original_series is not None and pd.api.types.is_numeric_dtype(original_series):
+        if original_series is not None and pd.api.types.is_numeric_dtype(original_series):
              logger.info(f"[{col_name}] Failure rate {rate:.1%} exceeds threshold. Attempting Outlier Detection.")
              is_outlier = self._detect_outliers(original_series)
              

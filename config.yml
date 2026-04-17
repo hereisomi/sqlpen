@@ -1,32 +1,31 @@
-logging:
-  enabled: true
-  dir: "log"
-  max_repr_len: 2000
-  bucket_minutes: 10
-
-pipeline:
-  outlier_pct: 0.5
-  casting: true
-  cleaner: true
-  profiler: true
-  trace_sql: true
-  schema_save_path: "schema"
-  chunk_size: 10000
-
-schema_corrector:
-  on_error: "coerce"
-  failure_threshold: 3.0
-  validate_fk: false
-  add_missing_cols: false
-
 casting:
-  use_transform: true
+  chunk_size: 50000
   infer_threshold: 0.9
-  nan_threshold: 0.30
   max_null_increase: 0.1
   max_sample_size: 1000
-  validate_conversions: true
+  nan_threshold: 0.3
   parallel: false
-  chunk_size: 50000
-
-jobs: []
+  use_transform: true
+  validate_conversions: true
+jobs:
+- if_exist: insert
+  source: sample_data/new_users.parquet
+  table: new_users
+logging:
+  bucket_minutes: 10
+  dir: log
+  enabled: true
+  max_repr_len: 2000
+pipeline:
+  casting: true
+  chunk_size: 10000
+  cleaner: true
+  outlier_pct: 0.5
+  profiler: true
+  schema_save_path: schema
+  trace_sql: true
+schema_corrector:
+  add_missing_cols: false
+  failure_threshold: 3.0
+  on_error: coerce
+  validate_fk: false

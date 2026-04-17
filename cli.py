@@ -26,6 +26,23 @@ def _setup_logging(verbose: bool = False) -> None:
     )
 
 
+def _get_default_table_name(source: str) -> str:
+    """Derive a safe SQL table name from a file path or URL."""
+    from pathlib import Path
+    import re
+    # If URL, split off query parameters
+    path_part = source.split("?")[0]
+    stem = Path(path_part).stem
+    
+    # Sanitize: lowercase, remove non-alphanumeric, don't start with digit
+    s = stem.lower()
+    s = re.sub(r"[^\w]", "_", s)
+    s = re.sub(r"__+", "_", s).strip("_")
+    if re.match(r"^\d", s):
+        s = "_" + s
+    return s or "table_1"
+
+
 @click.group()
 @click.version_option(version="0.1.0", prog_name="sqlpen")
 @click.option("-v", "--verbose", is_flag=True, help="Enable debug logging")
@@ -38,7 +55,7 @@ def cli(ctx, verbose):
 
 @cli.command()
 @click.argument("source")
-@click.option("--table", required=True, help="Target table name")
+@click.option("--table", required=False, default=None, help="Target table name (inferred from source if omitted)")
 @click.option("--url", default=None, help="Database URL (or set DATABASE_URL env)")
 @click.option("--if-exist", "if_exist", default="insert",
               type=click.Choice(["insert", "replace", "upsert", "update"], case_sensitive=False),
@@ -60,6 +77,10 @@ def load(source, table, url, if_exist, constraint, schema, chunk, no_clean, no_c
 
     engine = get_engine_from_env(url)
 
+    if not table:
+        table = _get_default_table_name(source)
+        click.echo(f"[INFO] No table specified. Inferred target table: '{table}'")
+
     result = df_tosql(
         df=source,
         table=table,
@@ -78,15 +99,16 @@ def load(source, table, url, if_exist, constraint, schema, chunk, no_clean, no_c
 
 @cli.command()
 @click.argument("source")
-@click.option("--table", required=True, help="Target table name")
+@click.option("--table", required=False, default=None, help="Target table name (inferred from source if omitted)")
 @click.option("--url", default=None, help="Database URL (or set DATABASE_URL env)")
 @click.option("--pk", default=None, help="Comma-separated primary key columns")
 @click.option("--constraint", default=None, help="Comma-separated constraint columns")
-@click.option("--no-clean", is_flag=True, help="Skip column name sanitization")
-@click.option("--no-cast", is_flag=True, help="Skip automatic type casting")
+@click.option("--clean", is_flag=True, help="Sanitize column names")
+@click.option("--cast", is_flag=True, help="Auto-cast variable types")
 @click.option("--outlier", default=0.5, type=float, help="IQR outlier threshold (0=disabled)")
 @click.option("--report-dir", default=None, type=click.Path(), help="Directory for harness report")
-def test(source, table, url, pk, constraint, no_clean, no_cast, outlier, report_dir):
+@click.option("--auto-profile", "auto_profile", is_flag=True, help="Auto-infer PK from data profile")
+def test(source, table, url, pk, constraint, clean, cast, outlier, report_dir, auto_profile):
     """Run the csv_harness benchmark (INSERT -> UPSERT -> UPDATE) against a database.
 
     SOURCE must be a path to a CSV file.
@@ -98,16 +120,21 @@ def test(source, table, url, pk, constraint, no_clean, no_cast, outlier, report_
 
     engine = get_engine_from_env(url)
 
+    if not table:
+        table = _get_default_table_name(source)
+        click.echo(f"[INFO] No table specified. Inferred target table: '{table}'")
+
     report = run_csv_pipeline(
         csv_path=source,
         engine=engine,
         table=table,
         pk_cols=pk.split(",") if pk else "id",
         constraint_cols=constraint.split(",") if constraint else "id",
-        clean=not no_clean,
-        cast=not no_cast,
+        clean=clean,
+        cast=cast,
         outlier=outlier,
         report_dir=report_dir,
+        auto_profiling=auto_profile,
     )
     click.echo(report.summary())
 
@@ -388,7 +415,7 @@ def config_set(key, value, config_path):
 
 @config.command("add-job")
 @click.option("--source", required=True, help="Source file path (CSV/Parquet/JSON/Excel)")
-@click.option("--table", required=True, help="Target table name")
+@click.option("--table", required=False, default=None, help="Target table name (inferred from source if omitted)")
 @click.option("--url", default=None, help="Database URL (overrides top-level database_url)")
 @click.option("--if-exist", "if_exist", default="insert",
               type=click.Choice(["insert", "replace", "upsert", "update"], case_sensitive=False),
@@ -404,6 +431,10 @@ def config_add_job(source, table, url, if_exist, constraint, config_path):
     path = _find_config_path(config_path)
     data = _load_yml(path)
 
+    if not table:
+        table = _get_default_table_name(source)
+        click.echo(f"[INFO] No table specified. Inferred target table: '{table}'")
+
     job: dict = {"source": source, "table": table, "if_exist": if_exist}
     if url:
         job["database_url"] = url
@@ -413,7 +444,7 @@ def config_add_job(source, table, url, if_exist, constraint, config_path):
     jobs = data.setdefault("jobs", [])
     jobs.append(job)
     _save_yml(path, data)
-    click.echo(f"[OK] Job added: {source} → {table} (mode={if_exist})  [{len(jobs)} total jobs]")
+    click.echo(f"[OK] Job added: {source} -> {table} (mode={if_exist})  [{len(jobs)} total jobs]")
 
 
 @config.command("clear-jobs")
