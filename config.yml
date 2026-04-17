@@ -1,0 +1,32 @@
+logging:
+  enabled: true
+  dir: "log"
+  max_repr_len: 2000
+  bucket_minutes: 10
+
+pipeline:
+  outlier_pct: 0.5
+  casting: true
+  cleaner: true
+  profiler: true
+  trace_sql: true
+  schema_save_path: "schema"
+  chunk_size: 10000
+
+schema_corrector:
+  on_error: "coerce"
+  failure_threshold: 3.0
+  validate_fk: false
+  add_missing_cols: false
+
+casting:
+  use_transform: true
+  infer_threshold: 0.9
+  nan_threshold: 0.30
+  max_null_increase: 0.1
+  max_sample_size: 1000
+  validate_conversions: true
+  parallel: false
+  chunk_size: 50000
+
+jobs: []
