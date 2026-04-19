@@ -1,0 +1,9 @@
+{
+  "table": "dict_test",
+  "schema": null,
+  "primary_keys": null,
+  "dtypes": {
+    "id": "int64",
+    "name": "str"
+  }
+}

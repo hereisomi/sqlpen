@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 import pandas as pd
 from typing import Tuple, Dict, Optional, List, Any
 import logging
@@ -56,7 +56,7 @@ def profile_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         high_null_cols = [row for row in profile_data if row['% of None'] > 20]
         if high_null_cols:
             log_json("high_null_columns", high_null_cols)
-    except Exception:
+    except (OSError, TypeError, ValueError):
         logger.exception("Failed to log high_null_columns", exc_info=True)
     return result
 
@@ -145,7 +145,7 @@ def sample_dispatcher(
         logger.warning(f"Sampling warnings: {metadata['warnings']}")
     try:
         log_json("sampling_stats", metadata)
-    except Exception:
+    except (OSError, TypeError, ValueError):
         logger.exception("Failed to log sampling_stats", exc_info=True)
 
     return sampled_df, metadata
@@ -159,7 +159,15 @@ def _build_composite_pk(
     """Build composite PK: str concat with delimiter (collision-resistant via escaping)."""
     # Escape specials in strings to avoid false splits (e.g., escape delimiter in values)
     escape_char = '\\'
-    df_escaped = df[pk_components].astype(str).apply(lambda s: s.str.replace(escape_char, escape_char + escape_char, regex=False).str.replace(delimiter, escape_char + delimiter, regex=False))
+    df_str = df[pk_components].astype(str)
+    # Vectorised column-wise escape: avoid nested lambda
+    df_escaped = df_str.copy()
+    for col in df_escaped.columns:
+        df_escaped[col] = (
+            df_escaped[col]
+            .str.replace(escape_char, escape_char + escape_char, regex=False)
+            .str.replace(delimiter, escape_char + delimiter, regex=False)
+        )
     composite = df_escaped.agg(delimiter.join, axis=1)
     return composite
 
@@ -193,7 +201,7 @@ def get_pk(
         logger.info(f"Single PK: '{pk_col}'.")
         try:
             log_json("pk_detection", {"pk_name": 'pk', "components": metadata['components'], "is_unique": metadata['is_unique'], "non_null_rows": metadata.get('non_null_pk_rows', 0), "warnings": metadata.get('warnings', [])})
-        except Exception:
+        except (OSError, TypeError, ValueError):
             logger.exception("Failed to log pk_detection (single)", exc_info=True)
         return df_work, 'pk', metadata
 
@@ -243,7 +251,7 @@ def get_pk(
             logger.info(f"Unique composite PK with {len(pk_components)} cols.")
             try:
                 log_json("pk_detection", {"pk_name": '_'.join(pk_components) + '_pk', "components": metadata['components'], "is_unique": metadata['is_unique'], "non_null_rows": metadata.get('non_null_pk_rows', 0), "warnings": metadata.get('warnings', [])})
-            except Exception:
+            except (OSError, TypeError, ValueError):
                 logger.exception("Failed to log pk_detection (composite)", exc_info=True)
             return df_work, '_'.join(pk_components) + '_pk', metadata
 
@@ -271,7 +279,7 @@ def get_pk(
         logger.warning(f"PK warnings: {metadata['warnings']}")
     try:
         log_json("pk_detection", {"pk_name": pk_name, "components": metadata['components'], "is_unique": metadata['is_unique'], "non_null_rows": metadata.get('non_null_pk_rows', 0), "warnings": metadata.get('warnings', [])})
-    except Exception:
+    except (OSError, TypeError, ValueError):
         logger.exception("Failed to log pk_detection (fallback)", exc_info=True)
 
     return df_work, pk_name, metadata

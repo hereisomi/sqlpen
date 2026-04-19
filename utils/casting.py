@@ -1,4 +1,4 @@
-﻿"""
+"""
 casting.py - Enhanced DataFrame Type Casting Engine
 
 High-performance, intelligent type inference with caching, validation, and parallel processing.
@@ -113,7 +113,7 @@ def _is_numeric_column(series: pd.Series, threshold: float = 0.9) -> bool:
     if len(sample) == 0:
         return False
     cleaned = sample.str.replace(_CURRENCY_PATTERN, '', regex=True).str.strip()
-    return cleaned.apply(lambda x: bool(_INT_PATTERN.match(x) or _FLOAT_PATTERN.match(x))).mean() > threshold
+    return (cleaned.str.match(_INT_PATTERN) | cleaned.str.match(_FLOAT_PATTERN)).mean() > threshold
 
 def _is_boolean_column(series: pd.Series, threshold: float = 0.9) -> bool:
     sample = series.dropna().astype(str).str.lower().str.strip().head(100)
@@ -178,7 +178,7 @@ def _transform_dtypes_enhanced(df: pd.DataFrame, dtype_map: Mapping[str, str], c
             else:
                 converted = result[col].astype(target)
             result[col] = converted
-        except Exception as e:
+        except (TypeError, ValueError) as e:
             _LOG.debug(f"Explicit dtype cast for column '{col}' to '{target}' failed: {e}")
 
     for col in result.select_dtypes(include=['object']).columns:

@@ -47,7 +47,7 @@ def load_config():
     cwd_path = Path.cwd() / "config.yml"
     try:
         module_root = Path(__file__).resolve().parents[1]
-    except Exception:
+    except Exception:  # noqa: BLE001 – path resolution may fail on any OS
         module_root = Path.cwd()
     alt_path = module_root / "config.yml"
     config_path = cwd_path if cwd_path.exists() else (alt_path if alt_path.exists() else None)
@@ -68,7 +68,7 @@ def load_config():
                 if user_config and "logging" in user_config:
                     # Merge user config with defaults
                     defaults["logging"].update(user_config["logging"])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 – config load must never crash caller
             _print_once(f"[logger] failed to load {config_path}: {e} (using defaults)", "config")
     else:
         _print_once("[logger] config.yml not found; using defaults", "config")
@@ -124,7 +124,7 @@ def _safe_str(obj, maxlen=MAX_REPR_LEN):
     try:
         s = repr(obj)
         return s[:maxlen] + ("..." if len(s) > maxlen else "")
-    except Exception:
+    except Exception:  # noqa: BLE001 – repr must never crash
         return f"<unserializable {type(obj).__name__}>"
 
 
@@ -153,10 +153,10 @@ def log_call(func):
                     bound = sig.bind_partial(*args, **kwargs)
                     for k, v in bound.arguments.items():
                         f.write(f"  {k}: {_safe_str(v)}\n")
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 – log write must not crash
                     f.write(f"  <failed to parse signature: {e}>\n")
                 f.write("\n")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 – log write must not crash
             _print_once(f"[logger] failed to write to {fname}: {e}", "logfile")
 
         try:
@@ -168,17 +168,17 @@ def log_call(func):
                     f.write("- outputs:\n")
                     f.write(f"  {_safe_str(out)}\n")
                     f.write(f"{SEP}\n")
-            except Exception as e2:
+            except Exception as e2:  # noqa: BLE001 – log write must not crash
                 _print_once(f"[logger] failed to write to {fname}: {e2}", "logfile")
             return out
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 – caller's exception must propagate
             # Log failure
             try:
                 with fname.open("a", encoding="utf-8") as f:
                     f.write(f"# {mod} - {name} (FAILURE)\n")
                     f.write(f"- error: {type(e).__name__}: {str(e)}\n")
                     f.write(f"{SEP}\n")
-            except Exception as e3:
+            except Exception as e3:  # noqa: BLE001 – log write must not crash
                 _print_once(f"[logger] failed to write to {fname}: {e3}", "logfile")
             raise e
 
@@ -201,7 +201,7 @@ def log_string(label: str, value: str):
             f.write(f"# STRING - {label}\n\n")
             f.write(value + "\n")
             f.write(f"{SEP}\n")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 – log write must not crash
         _print_once(f"[logger] failed to write to {fname}: {e}", "logfile")
 
 
@@ -211,7 +211,7 @@ def log_json(label: str, obj):
         return
     try:
         payload = json.dumps(obj, indent=2, default=str)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 – serialization fallback
         payload = f"<json serialization failed: {e}>"
 
     fname = _bucketed_filename()
@@ -220,7 +220,7 @@ def log_json(label: str, obj):
             f.write(f"# JSON - {label}\n\n")
             f.write(payload + "\n")
             f.write(f"{SEP}\n")
-    except Exception as e2:
+    except Exception as e2:  # noqa: BLE001 – log write must not crash
         _print_once(f"[logger] failed to write to {fname}: {e2}", "logfile")
 
 
@@ -240,7 +240,7 @@ def log_dataframe(label: str, df: pd.DataFrame, max_rows=20):
             if len(df) > max_rows:
                 f.write(f"\n... ({len(df) - max_rows} more rows)")
             f.write(f"\n{SEP}\n")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 – log write must not crash
         _print_once(f"[logger] failed to write to {fname}: {e}", "logfile")
 
 

@@ -1,114 +1,109 @@
 """
-conftest.py — Shared fixtures for the SqlPen test suite.
-
-Provides a CLI-injectable SQLAlchemy engine fixture so every test module
-can be run against any supported database dialect.
-
-Usage:
-    # Default: SQLite in-memory
-    pytest tests/
-
-    # Against PostgreSQL
-    pytest tests/ --url "postgresql://user:pass@localhost/mydb"
-
-    # Against MySQL
-    pytest tests/ --url "mysql+pymysql://user:pass@localhost/mydb"
-
-    # Against SQL Server
-    pytest tests/ --url "mssql+pyodbc://user:pass@host/db?driver=ODBC+Driver+17+for+SQL+Server"
-
-    # Against Oracle
-    pytest tests/ --url "oracle+cx_oracle://user:pass@host:1521/SID"
-
-    # Run a single module against a specific DB
-    pytest tests/test_df_tosql.py --url "postgresql://user:pass@localhost/mydb" -v
+Shared fixtures for all test modules.
+Engine is created once from --url CLI arg and reused across tests.
 """
 from __future__ import annotations
 
+import argparse
+import sys
+from typing import Optional
+
 import pytest
 import sqlalchemy as sa
+from sqlalchemy.engine import Engine
 
 
-# ---------------------------------------------------------------------------
-# CLI option
-# ---------------------------------------------------------------------------
+# ── pytest configuration ────────────────────────────────────────────────────────
 
 def pytest_addoption(parser):
+    """Register custom command-line options for pytest."""
     parser.addoption(
-        "--url",
-        action="store",
-        default="sqlite:///:memory:",
-        help="SQLAlchemy connection URL. Defaults to sqlite:///:memory:",
+        "--url", 
+        action="store", 
+        default="sqlite:///:memory:", 
+        help="SQLAlchemy engine URL for tests"
     )
 
+# ── CLI arg parsing (Fallback for python script execution) ────────────────────
 
-# ---------------------------------------------------------------------------
-# Engine fixture
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="session")
-def db_url(request) -> str:
-    return request.config.getoption("--url")
+def parse_url(argv=None) -> str:
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("--url", default="sqlite:///:memory:", help="SQLAlchemy engine URL")
+    args, _ = p.parse_known_args(argv or sys.argv[1:])
+    return args.url
 
 
-@pytest.fixture(scope="session")
-def engine(db_url):
-    """
-    Session-scoped SQLAlchemy engine resolved from --url CLI option.
-    Defaults to SQLite in-memory if --url is not provided.
-    """
-    eng = sa.create_engine(db_url)
+def make_engine(url: Optional[str] = None) -> Engine:
+    url = url or parse_url()
+    return sa.create_engine(url)
+
+# ── pytest fixtures ───────────────────────────────────────────────────────────
+
+@pytest.fixture
+def engine(request):
+    """Shared engine using the URL provided by the --url pytest option."""
+    url = request.config.getoption("--url")
+    eng = sa.create_engine(url)
+    drop_employees(eng) # Force fresh drop to handle type/casing changes
+    create_employees(eng)
+    seed_employees(eng)
     yield eng
     eng.dispose()
 
 
-@pytest.fixture(scope="session")
-def dialect(engine) -> str:
-    """Lowercase dialect name: sqlite | postgresql | mysql | mssql | oracle."""
-    return engine.dialect.name.lower()
-
-
-# ---------------------------------------------------------------------------
-# Sample DataFrame factories
-# ---------------------------------------------------------------------------
-
 @pytest.fixture
-def sample_df():
-    """10-row mixed-type DataFrame with clean column names."""
-    import pandas as pd
-    import numpy as np
-    rng = np.random.default_rng(0)
-    return pd.DataFrame({
-        "id":     range(1, 11),
-        "name":   [f"User_{i}" for i in range(1, 11)],
-        "email":  [f"user{i}@test.com" for i in range(1, 11)],
-        "score":  rng.random(10) * 100,
-        "active": rng.choice([True, False], size=10),
-    })
+def tmp_engine(request):
+    """Bare engine (no pre-created tables) using URL provided by --url."""
+    url = request.config.getoption("--url")
+    eng = sa.create_engine(url)
+    yield eng
+    eng.dispose()
 
 
-@pytest.fixture
-def dirty_df():
-    """10-row DataFrame with dirty column names, string types, and an outlier."""
-    import pandas as pd
-    return pd.DataFrame({
-        " ID ":    [str(i) for i in range(1, 11)],
-        "Email!":  [f"user{i}@test.com" for i in range(1, 11)],
-        " Score ": [float(i * 10) if i < 10 else 9999.0 for i in range(1, 11)],
-        "Active":  ["true", "false"] * 5,
-        "dt":      [f"2024-01-{i:02d}" for i in range(1, 11)],
-    })
+
+# ── Shared table setup helpers ────────────────────────────────────────────────
+
+def get_employees_table(meta: sa.MetaData) -> sa.Table:
+    return sa.Table(
+        "employees", meta,
+        sa.Column("emp_id", sa.Integer, primary_key=True),
+        sa.Column("name", sa.String(50), nullable=False),
+        sa.Column("dept", sa.String(50)),
+        sa.Column("salary", sa.Numeric(15, 2))
+    )
+
+def create_employees(engine: Engine) -> None:
+    meta = sa.MetaData()
+    get_employees_table(meta)
+    meta.create_all(engine)
 
 
-@pytest.fixture
-def large_df():
-    """1000-row DataFrame for bulk/chunk testing."""
-    import pandas as pd
-    import numpy as np
-    rng = np.random.default_rng(42)
-    return pd.DataFrame({
-        "id":    range(1, 1001),
-        "name":  [f"User_{i}" for i in range(1, 1001)],
-        "value": rng.random(1000) * 1000,
-        "flag":  rng.choice([True, False], size=1000),
-    })
+def drop_employees(engine: Engine) -> None:
+    meta = sa.MetaData()
+    get_employees_table(meta)
+    sa.Table("employees_tracker", meta,
+             sa.Column("emp_id", sa.Integer),
+             sa.Column("name", sa.String(50)),
+             sa.Column("dept", sa.String(50)),
+             sa.Column("salary", sa.Numeric(15, 2)),
+             sa.Column("_updated_at", sa.DateTime)
+    )
+    meta.drop_all(engine)
+
+
+def seed_employees(engine: Engine) -> None:
+    meta = sa.MetaData()
+    emp = get_employees_table(meta)
+    with engine.begin() as conn:
+        conn.execute(emp.delete())
+        conn.execute(emp.insert(), [
+            {"emp_id": 1, "name": "Alice", "dept": "Engineering", "salary": 90000},
+            {"emp_id": 2, "name": "Bob", "dept": "Marketing", "salary": 70000},
+            {"emp_id": 3, "name": "Carol", "dept": "Engineering", "salary": 85000}
+        ])
+
+
+def fetch_all(engine: Engine, table: str) -> list:
+    with engine.connect() as conn:
+        result = conn.execute(sa.text(f"SELECT * FROM {table}"))
+        return [dict(r._mapping) for r in result]

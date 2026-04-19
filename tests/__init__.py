@@ -1,1 +1,0 @@
-# SqlPen test suite

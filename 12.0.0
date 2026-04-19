@@ -1,6 +1,0 @@
-Collecting pyarrow
-  Downloading pyarrow-23.0.1-cp310-cp310-win_amd64.whl.metadata (3.1 kB)
-Downloading pyarrow-23.0.1-cp310-cp310-win_amd64.whl (27.5 MB)
-   ---------------------------------------- 27.5/27.5 MB 11.1 MB/s  0:00:02
-Installing collected packages: pyarrow
-Successfully installed pyarrow-23.0.1

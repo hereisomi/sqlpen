@@ -1,0 +1,23 @@
+{
+  "table": "quota_batch_2",
+  "schema": null,
+  "primary_keys": null,
+  "dtypes": {
+    "COST_ID": "int64",
+    "COST_CODE": "object",
+    "VENDOR": "object",
+    "CONTRACT": "object",
+    "LINK_TYPE": "object",
+    "BUCKET": "int64",
+    "MIN_CAPACITY": "int64",
+    "MAX_CAPACITY": "int64",
+    "UNIT_COST_PER_MBPS_MONTHLY": "float64",
+    "MINSLAB": "int64",
+    "LOCKIN_MONTHS": "int64",
+    "REMARKS": "object",
+    "EFFECTIVE_START_TIME": "datetime64[ns]",
+    "EFFECTIVE_END_TIME": "datetime64[ns]",
+    "IS_CURRENT": "int64",
+    "CREATED_BY": "float64"
+  }
+}

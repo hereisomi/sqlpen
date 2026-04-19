@@ -1,0 +1,23 @@
+database_url: "mssql+pymssql://SA:Omi2omi1!@localhost:1433/master"
+
+jobs:
+  - source: "csv/quota.csv"
+    table: "quota_test"
+    mode: "upsert"
+    pk: "COST_ID"
+    apply_ddl: true
+
+  - source: "csv/making_int.csv"
+    table: "making_int_test"
+    mode: "insert"
+    apply_ddl: true
+
+  - source: "csv/command.csv"
+    table: "command_test"
+    mode: "insert"
+    apply_ddl: true
+
+  - source: "csv/link.csv"
+    table: "link_test"
+    mode: "insert"
+    apply_ddl: true
